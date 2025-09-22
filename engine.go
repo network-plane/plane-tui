@@ -196,7 +196,7 @@ func (e *Engine) Run(rl *readline.Instance) error {
 			continue
 		}
 		if exitRequested(tokens[0]) {
-			fmt.Fprintln(e.outputWriter, "Shutting down.")
+			fmt.Fprintf(e.outputWriter, "\nShutting down.\n")
 			return nil
 		}
 		if err := rl.SaveHistory(line); err != nil {
@@ -249,6 +249,10 @@ func (e *Engine) process(tokens []string) error {
 		return nil
 	case "ctx":
 		return e.handleCtxCommand(tokens[1:])
+	case "switch":
+		return e.handleSwitchCommand(tokens[1:])
+	case "cd":
+		return e.handleCDCommand(tokens[1:])
 	case "back", "..":
 		return e.contexts.Pop()
 	case "/":
@@ -258,10 +262,27 @@ func (e *Engine) process(tokens []string) error {
 		return nil
 	}
 
-	if ctx == "" {
-		if spec, ok := e.registry.Context(tokens[0]); ok && spec.Name != "" {
-			return e.contexts.Navigate(spec.Name, nil)
+	ctx = e.contexts.Current().Spec.Name
+	if canonical, ok := e.registry.ResolveContextName(tokens[0]); ok && canonical != "" {
+		if len(tokens) == 1 {
+			if canonical == ctx {
+				return nil
+			}
+			return e.contexts.Navigate(canonical, nil)
 		}
+		if canonical != ctx {
+			if err := e.contexts.Navigate(canonical, nil); err != nil {
+				return err
+			}
+			ctx = e.contexts.Current().Spec.Name
+		}
+		tokens = tokens[1:]
+	} else if ctx != "" && tokens[0] == ctx {
+		tokens = tokens[1:]
+	}
+
+	if len(tokens) == 0 {
+		return nil
 	}
 
 	entry, ok := e.registry.Resolve(ctx, tokens[0])
@@ -339,6 +360,8 @@ func (e *Engine) invoke(entry CommandEntry, args []string) error {
 		}
 	}
 
+	EnsureLineBreak(execRT.output)
+
 	return nil
 }
 
@@ -366,36 +389,41 @@ func (e *Engine) coreHandler(entry CommandEntry) func(CommandRuntime, CommandInp
 }
 
 func (e *Engine) renderHelp(ctx string) {
-	fmt.Fprintln(e.outputWriter, e.helpHeader)
+	out := NewOutputChannel(e.outputWriter)
+	w := out.Writer()
+	fmt.Fprintln(w, e.helpHeader)
 	if ctx == "" {
 		contexts := e.registry.Contexts(false)
 		if len(contexts) > 0 {
-			fmt.Fprintln(e.outputWriter, "Contexts:")
+			fmt.Fprintln(w, "Contexts:")
 			sort.Slice(contexts, func(i, j int) bool { return contexts[i].Name < contexts[j].Name })
 			for _, c := range contexts {
-				fmt.Fprintf(e.outputWriter, "  %-15s %s\n", c.Name, c.Description)
+				fmt.Fprintf(w, "  %-15s %s\n", c.Name, c.Description)
 			}
 		}
 		rootCmds := e.registry.Commands("", false)
 		if len(rootCmds) > 0 {
-			fmt.Fprintln(e.outputWriter, "\nGlobal Commands:")
+			fmt.Fprintln(w, "\nGlobal Commands:")
 			for _, cmd := range rootCmds {
-				fmt.Fprintf(e.outputWriter, "  %-20s %s\n", cmd.Name, cmd.Summary)
+				fmt.Fprintf(w, "  %-20s %s\n", cmd.Name, cmd.Summary)
 			}
 		}
-		fmt.Fprintln(e.outputWriter, "\nType a context name to enter it or 'ctx goto <name>'.")
+		fmt.Fprintln(w, "\nType a context name to enter it, or use 'switch <name>' / 'cd <name>'. Use 'cd ..' to go back.")
+		EnsureLineBreak(out)
 		return
 	}
 
 	cmds := e.registry.Commands(ctx, false)
 	if len(cmds) == 0 {
-		fmt.Fprintf(e.outputWriter, "No commands registered for context %s\n", ctx)
+		fmt.Fprintf(w, "No commands registered for context %s\n", ctx)
+		EnsureLineBreak(out)
 		return
 	}
-	fmt.Fprintf(e.outputWriter, "Commands in %s:\n", ctx)
+	fmt.Fprintf(w, "Commands in %s:\n", ctx)
 	for _, cmd := range cmds {
-		fmt.Fprintf(e.outputWriter, "  %-20s %s\n", cmd.Name, cmd.Summary)
+		fmt.Fprintf(w, "  %-20s %s\n", cmd.Name, cmd.Summary)
 	}
+	EnsureLineBreak(out)
 }
 
 func (e *Engine) listContexts() {
@@ -429,6 +457,47 @@ func (e *Engine) handleCtxCommand(args []string) error {
 		return e.contexts.Pop()
 	default:
 		return fmt.Errorf("unknown ctx action: %s", args[0])
+	}
+}
+
+func (e *Engine) handleSwitchCommand(args []string) error {
+	if len(args) != 1 {
+		return errors.New("switch <context>")
+	}
+	canonical, ok := e.registry.ResolveContextName(args[0])
+	if !ok || canonical == "" {
+		return fmt.Errorf("unknown context: %s", args[0])
+	}
+	return e.contexts.Navigate(canonical, nil)
+}
+
+func (e *Engine) handleCDCommand(args []string) error {
+	if len(args) == 0 {
+		current := e.contexts.Current().Spec.Name
+		if current == "" {
+			fmt.Fprintln(e.outputWriter, "Current context: root")
+		} else {
+			fmt.Fprintf(e.outputWriter, "Current context: %s\n", current)
+		}
+		return nil
+	}
+	if len(args) > 1 {
+		return errors.New("cd accepts a single target")
+	}
+	target := strings.TrimSpace(args[0])
+	switch target {
+	case "", ".":
+		return nil
+	case "..":
+		return e.contexts.Pop()
+	case "/":
+		return e.contexts.PopToRoot()
+	default:
+		canonical, ok := e.registry.ResolveContextName(target)
+		if !ok || canonical == "" {
+			return fmt.Errorf("unknown context: %s", target)
+		}
+		return e.contexts.Navigate(canonical, nil)
 	}
 }
 
