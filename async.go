@@ -131,3 +131,13 @@ func (m *TaskManager) DescribeTask(id string) (*TaskHandle, bool) {
 	copy := *h
 	return &copy, true
 }
+
+// SetOutputChannel updates the output destination for future task logs.
+func (m *TaskManager) SetOutputChannel(out OutputChannel) {
+	if out == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.output = out
+}

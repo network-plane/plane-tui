@@ -152,6 +152,22 @@ func (e *Engine) SetOutputLevel(level OutputLevel) {
 	e.outputLevel = level
 }
 
+// SetOutputWriter swaps the engine's writer for command output, returning the previous writer.
+func (e *Engine) SetOutputWriter(w io.Writer) io.Writer {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev := e.outputWriter
+	if w == nil {
+		e.outputWriter = os.Stdout
+	} else {
+		e.outputWriter = w
+	}
+	if e.tasks != nil {
+		e.tasks.SetOutputChannel(NewOutputChannel(e.outputWriter))
+	}
+	return prev
+}
+
 // Run starts the interactive loop.
 func (e *Engine) Run(rl *readline.Instance) error {
 	if rl == nil {

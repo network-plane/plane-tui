@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/chzyer/readline"
+import (
+	"io"
+
+	"github.com/chzyer/readline"
+)
 
 var defaultEngine = NewEngine()
 
@@ -61,6 +65,11 @@ func RegisterLegacyCommand(ctx string, cmd LegacyCommand) {
 // UseMiddleware appends middleware to the default engine.
 func UseMiddleware(mw ...Middleware) {
 	WithMiddleware(mw...)(defaultEngine)
+}
+
+// SetOutputWriter sets the writer used for command output, returning the previous writer.
+func SetOutputWriter(w io.Writer) io.Writer {
+	return defaultEngine.SetOutputWriter(w)
 }
 
 // Run starts the main loop using the default engine.
