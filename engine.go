@@ -342,21 +342,20 @@ func (e *Engine) invoke(entry CommandEntry, args []string) error {
 		}
 	}
 
-	if result.Status == StatusFailed {
-		return nil
-	}
-	if result.NextContext != "" && execRT.nextContext == "" {
-		execRT.nextContext = result.NextContext
-		execRT.nextPayload = result.Pipeline
-	}
+	if result.Status != StatusFailed {
+		if result.NextContext != "" && execRT.nextContext == "" {
+			execRT.nextContext = result.NextContext
+			execRT.nextPayload = result.Pipeline
+		}
 
-	if entry.Spec.AllowPipes && result.Pipeline != nil {
-		execRT.SetPipelineData(result.Pipeline)
-	}
+		if entry.Spec.AllowPipes && result.Pipeline != nil {
+			execRT.SetPipelineData(result.Pipeline)
+		}
 
-	if execRT.nextContext != "" {
-		if err := e.contexts.Navigate(execRT.nextContext, execRT.nextPayload); err != nil {
-			execRT.output.Error(err.Error())
+		if execRT.nextContext != "" {
+			if err := e.contexts.Navigate(execRT.nextContext, execRT.nextPayload); err != nil {
+				execRT.output.Error(err.Error())
+			}
 		}
 	}
 
@@ -390,38 +389,45 @@ func (e *Engine) coreHandler(entry CommandEntry) func(CommandRuntime, CommandInp
 
 func (e *Engine) renderHelp(ctx string) {
 	out := NewOutputChannel(e.outputWriter)
-	w := out.Writer()
-	fmt.Fprintln(w, e.helpHeader)
+	printLine := func(line string) {
+		out.Info(line)
+	}
+	header := strings.TrimSpace(e.helpHeader)
+	if header != "" {
+		printLine(header)
+	}
 	if ctx == "" {
 		contexts := e.registry.Contexts(false)
 		if len(contexts) > 0 {
-			fmt.Fprintln(w, "Contexts:")
+			printLine("Contexts:")
 			sort.Slice(contexts, func(i, j int) bool { return contexts[i].Name < contexts[j].Name })
 			for _, c := range contexts {
-				fmt.Fprintf(w, "  %-15s %s\n", c.Name, c.Description)
+				printLine(fmt.Sprintf("  %-15s %s", c.Name, c.Description))
 			}
 		}
 		rootCmds := e.registry.Commands("", false)
 		if len(rootCmds) > 0 {
-			fmt.Fprintln(w, "\nGlobal Commands:")
+			printLine("")
+			printLine("Global Commands:")
 			for _, cmd := range rootCmds {
-				fmt.Fprintf(w, "  %-20s %s\n", cmd.Name, cmd.Summary)
+				printLine(fmt.Sprintf("  %-20s %s", cmd.Name, cmd.Summary))
 			}
 		}
-		fmt.Fprintln(w, "\nType a context name to enter it, or use 'switch <name>' / 'cd <name>'. Use 'cd ..' to go back.")
+		printLine("")
+		printLine("Type a context name to enter it, or use 'switch <name>' / 'cd <name>'. Use 'cd ..' to go back.")
 		EnsureLineBreak(out)
 		return
 	}
 
 	cmds := e.registry.Commands(ctx, false)
 	if len(cmds) == 0 {
-		fmt.Fprintf(w, "No commands registered for context %s\n", ctx)
+		printLine(fmt.Sprintf("No commands registered for context %s", ctx))
 		EnsureLineBreak(out)
 		return
 	}
-	fmt.Fprintf(w, "Commands in %s:\n", ctx)
+	printLine(fmt.Sprintf("Commands in %s:", ctx))
 	for _, cmd := range cmds {
-		fmt.Fprintf(w, "  %-20s %s\n", cmd.Name, cmd.Summary)
+		printLine(fmt.Sprintf("  %-20s %s", cmd.Name, cmd.Summary))
 	}
 	EnsureLineBreak(out)
 }
