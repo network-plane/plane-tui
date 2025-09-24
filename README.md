@@ -1,6 +1,6 @@
-# PlanetUI
+# PlaneTUI
 
-PlanetUI is a composable terminal user interface (TUI) framework for Go. It extends the original minimal command loop with structured command metadata, lifecycle hooks, dependency injection, context navigation, typed argument parsing, output management, and background task execution—while preserving compatibility with legacy commands.
+PlaneTUI is a composable terminal user interface (TUI) framework for Go. It extends the original minimal command loop with structured command metadata, lifecycle hooks, dependency injection, context navigation, typed argument parsing, output management, and background task execution—while preserving compatibility with legacy commands.
 
 ## Features
 
@@ -87,7 +87,7 @@ func main() {
 
 ## Working With Commands
 
-- Describe metadata in `CommandSpec`; PlanetUI uses it for help text, autocomplete, and validation.
+- Describe metadata in `CommandSpec`; PlaneTUI uses it for help text, autocomplete, and validation.
 - Use `CommandInput.Args/Flags` typed helpers (`String`, `Int`, `Bool`, `Duration`, `DecodeJSON`, etc.).
 - Return a `CommandResult` to signal success, surface structured errors, pass pipeline payloads, or request context navigation.
 - Access shared session data via `CommandRuntime.Session()`, services via `Services()`, and spawn background work with `TaskManager().Spawn`.
@@ -114,7 +114,7 @@ Moving to the new framework provides far richer behaviour. The steps below help 
 
 1. **Wrap legacy commands (optional bridge).** Call `tui.RegisterLegacyCommand(ctx, legacyCmd)` to keep using the old `Command` interface while you migrate. Legacy commands run exactly as before, but without access to new features.
 2. **Adopt factories.** Replace direct command instances with a `CommandFactory` that returns a fresh `Command` per execution. This unlocks dependency injection and isolates per-run state.
-3. **Describe metadata.** Implement `Spec() CommandSpec` on your command (and factory) to declare name, aliases, contexts, arguments, and flags. PlanetUI now drives help/autocomplete from the spec.
+3. **Describe metadata.** Implement `Spec() CommandSpec` on your command (and factory) to declare name, aliases, contexts, arguments, and flags. PlaneTUI now drives help/autocomplete from the spec.
 4. **Return results instead of printing.** Change `Exec` implementations to `Execute(rt, input) CommandResult`. Use `CommandResult.Status`, `Error`, `Messages`, and `Payload` to communicate outcomes instead of calling `fmt.Print` directly.
 5. **Use typed inputs.** Replace manual `[]string` parsing with `input.Args`/`input.Flags` based on the specs declared in step 3.
 6. **Adopt runtime services.** Access session storage, shared dependencies, output channels, context navigation, and task management through the provided `CommandRuntime` methods rather than global variables.
